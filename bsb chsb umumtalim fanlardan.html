@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Test Platform — IMA (images support)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial}
+    img.preview{max-width:160px;max-height:120px;object-fit:contain;border:1px solid #eee;padding:4px;background:#fff}
+    table td, table th { padding:6px; vertical-align:middle; }
+
+    /* HERO / background */
+    .hero {
+      position: relative;
+      height: 260px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 6px 20px rgba(2,6,23,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      margin-bottom: 18px;
+    }
+
+    /* Background image: adjust path if needed */
+    .hero::before{
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url("/mnt/data/Kattaqo%27rg%27on_IMA.jpg");
+      background-size: cover;
+      background-position: center;
+      filter: brightness(0.45) contrast(1);
+      z-index: 0;
+    }
+
+    .hero .hero-content{
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      padding: 0 16px;
+    }
+    .hero h2{
+      font-size: 2.2rem;
+      line-height: 1;
+      font-weight: 800;
+      text-shadow: 0 3px 14px rgba(0,0,0,0.45);
+      letter-spacing: 0.6px;
+      margin: 0;
+    }
+    .hero p{
+      margin-top: 6px;
+      color: rgba(255,255,255,0.95);
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px){
+      .hero{height:180px}
+      .hero h2{font-size:1.4rem}
+    }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-6">
+  <div class="max-w-6xl mx-auto">
+    <!-- HERO with background image + text -->
+    <div class="hero">
+      <div class="hero-content">
+        <h2>Kattakurgan tuman IM</h2>
+        <p class="text-sm">Test Platform (IMA) — rasm qo'llab-quvvatlash</p>
+      </div>
+    </div>
+
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">Test Platform (IMA) — rasm qo'llab-quvvatlash</h1>
+      <div class="flex gap-3 items-center">
+        <!-- IMPORT BUTTON ADDED TO HEADER -->
+        <button id="importMainBtn" class="px-3 py-2 border rounded text-sm">Import</button>
+        <button id="studentBtn" class="px-4 py-2 rounded-md bg-blue-600 text-white">O'quvchi</button>
+        <button id="adminBtn" class="px-4 py-2 rounded-md border">Admin</button>
+      </div>
+    </header>
+
+    <main class="grid lg:grid-cols-3 gap-6">
+      <section class="lg:col-span-2">
+        <div id="workspace"></div>
+      </section>
+
+      <aside>
+        <div class="p-4 bg-white border rounded">
+          <h3 class="font-semibold">Mavjud testlar</h3>
+          <ul id="testsList" class="mt-3 text-sm"></ul>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <input id="fileInput" type="file" accept="application/json" class="hidden" />
+
+<script>
+/* Full working single-file app
+ - Admin default credentials changed to: Teacher / Teacher369
+ - Tests support images (questions and options) saved as data URLs
+ - Results saved to localStorage and visible to admin
+ - Import/Export JSON supported
+ - Event delegation ensures buttons keep working after re-render
+*/
+
+/* -----------------------------------------------------------------
+   ---------- (The original long JavaScript code you've already provided)
+   I include it verbatim so your app logic remains unchanged.
+   -----------------------------------------------------------------
+   For brevity here I re-insert the exact JS from your last message.
+   (Paste your full JavaScript code block here — it's long so keep it
+   exactly as in your file. In this response the script is included.)
+*/
+
+const ADMIN_KEY = 'demo_admin_cred_v1';
+const LS_TESTS = 'tests_4opt_v1';
+const LS_RESULTS = 'tests_4opt_v1_results';
+const CLASSES = ['5a1','5a2','6a1','6a2','7a1','7a2','7t','8a1','8a2','8t','9a1','9a2','9t','10a1','10a2','10t','11a1','11a2','11at'];
+const PRELOADED_TESTS = []; // left empty per request
+
+// helpers
+const qs = (s,r=document)=> r.querySelector(s);
+const qsa = (s,r=document)=> [...r.querySelectorAll(s)];
+const escapeHtml = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+
+function getAdminCreds(){
+  try{
+    const raw = localStorage.getItem(ADMIN_KEY);
+    if(!raw) return { user: 'Teacher', pass: 'Teacher369' }; // <-- default changed here
+    return JSON.parse(raw);
+  }catch(e){
+    return { user: 'Teacher', pass: 'Teacher369' }; // <-- and fallback here
+  }
+}
+function saveAdminCreds(user, pass){ localStorage.setItem(ADMIN_KEY, JSON.stringify({ user: String(user), pass: String(pass) })); }
+
+function sanitizeTestsArray(arr){ return (arr||[]).filter(t => String(t.title||'').trim() !== 'Namuna test'); }
+function loadTests(){
+  try{
+    const raw = localStorage.getItem(LS_TESTS);
+    if(!raw){
+      localStorage.setItem(LS_TESTS, JSON.stringify(PRELOADED_TESTS));
+      return sanitizeTestsArray(PRELOADED_TESTS.slice());
+    }
+    const parsed = JSON.parse(raw);
+    const cleaned = sanitizeTestsArray(parsed);
+    if(JSON.stringify(cleaned) !== JSON.stringify(parsed)) localStorage.setItem(LS_TESTS, JSON.stringify(cleaned));
+    return cleaned;
+  }catch(e){ console.error(e); return []; }
+}
+function saveTests(t){ localStorage.setItem(LS_TESTS, JSON.stringify(t)); renderTestsList(); }
+
+function loadResults(){ try{ return JSON.parse(localStorage.getItem(LS_RESULTS) || '[]'); }catch(e){ return []; } }
+function saveResults(results){ localStorage.setItem(LS_RESULTS, JSON.stringify(results)); }
+function addResult(r){ const results = loadResults(); results.push(r); saveResults(results); }
+
+function deleteTest(i){
+  const tests = loadTests();
+  if(i<0 || i>=tests.length) return;
+  const testId = tests[i].id;
+  tests.splice(i,1);
+  saveTests(tests);
+  let results = loadResults();
+  results = results.filter(rr => rr.testId !== testId);
+  saveResults(results);
+}
+
+/* Import handler */
+function handleFileImport(e){
+  const f = e.target.files?.[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const data = JSON.parse(ev.target.result);
+      const existing = loadTests();
+      const toAdd = [];
+      if(Array.isArray(data)){
+        data.forEach(item => {
+          if(item && (item.title || item.questions)){
+            const newItem = {...item, id: Date.now() + Math.floor(Math.random()*1000000)};
+            newItem.questions = Array.isArray(newItem.questions) ? newItem.questions.map(q => ({
+              text: q.text||'',
+              options: (Array.isArray(q.options) ? q.options.slice(0,4).concat(Array(4-(q.options||[]).length).fill('')) : ['','','','']),
+              optionsImgs: (Array.isArray(q.optionsImgs) ? q.optionsImgs.slice(0,4).concat(Array(4-(q.optionsImgs||[]).length).fill('')) : ['','','','']),
+              correct: q.correct || 'a',
+              points: Number(q.points || 1),
+              img: q.img || ''
+            })) : [];
+            toAdd.push(newItem);
+          }
+        });
+      } else if(data && (data.title || data.questions)){
+        const newItem = {...data, id: Date.now()};
+        newItem.questions = Array.isArray(newItem.questions) ? newItem.questions.map(q => ({
+          text: q.text||'',
+          options: (Array.isArray(q.options) ? q.options.slice(0,4).concat(Array(4-(q.options||[]).length).fill('')) : ['','','','']),
+          optionsImgs: (Array.isArray(q.optionsImgs) ? q.optionsImgs.slice(0,4).concat(Array(4-(q.optionsImgs||[]).length).fill('')) : ['','','','']),
+          correct: q.correct || 'a',
+          points: Number(q.points || 1),
+          img: q.img || ''
+        })) : [];
+        toAdd.push(newItem);
+      } else { alert("JSON format noto'g'ri — test yoki testlar massivini yuboring."); e.target.value = ''; return; }
+      const merged = existing.concat(toAdd);
+      saveTests(merged);
+      alert('Import muvaffaqiyatli. Qo\'shilgan testlar: ' + toAdd.length);
+      e.target.value = '';
+      if(document.querySelector('#adminTests')) renderAdminTestsArea();
+    }catch(err){ console.error(err); alert('JSONni o\'qishda xato: ' + (err.message || err)); e.target.value = ''; }
+  };
+  reader.readAsText(f);
+}
+
+/* Render aside tests list */
+function renderTestsList(){
+  const list = qs('#testsList'); list.innerHTML = '';
+  const tests = loadTests();
+  if(!tests.length){ list.innerHTML = '<li class="text-slate-500">Hozircha testlar yoʻq</li>'; return; }
+  tests.forEach((t,i)=>{
+    const li = document.createElement('li'); li.className = 'mb-2';
+    li.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div><strong>${escapeHtml(t.title)}</strong><div class="text-xs text-slate-500">${t.questions.length} savol</div></div>
+        <div class="flex gap-2">
+          <button data-i="${i}" class="startBtn px-2 py-1 bg-green-600 text-white rounded text-xs">O'quvchi uchun</button>
+          <button data-i="${i}" class="adminEditBtn px-2 py-1 border rounded text-xs">Tahrirlash</button>
+          <button data-i="${i}" class="asideDelBtn px-2 py-1 border rounded text-xs text-red-600">O'chirish</button>
+        </div>
+      </div>`;
+    list.appendChild(li);
+  });
+  // note: we rely on event delegation for most workspace buttons; these are for aside actions
+  qsa('.startBtn').forEach(b=> b.addEventListener('click', e=> startStudentFlowForIndex(Number(e.target.dataset.i))));
+  qsa('.adminEditBtn').forEach(b=> b.addEventListener('click', e=> { openAdminLogin(()=> openAdminPanel(() => editTestByIndex(Number(e.target.dataset.i)))); }));
+  qsa('.asideDelBtn').forEach(b=> b.addEventListener('click', e=>{
+    const idx = Number(e.target.dataset.i);
+    openAdminLogin(()=> {
+      if(confirm('Haqiqatan ham ushbu testni o\'chirmoqchimisiz?')){
+        deleteTest(idx);
+        renderTestsList();
+        qs('#workspace').innerHTML = '';
+        alert('Test o\'chirildi.');
+      }
+    });
+  }));
+}
+
+/* ---------- Student flow (shows images) ---------- */
+let activeStudent = null; // global: used by event delegation
+
+function openStudentForm(preIndex = null){
+  const html = `
+    <div class="p-4 bg-white border rounded">
+      <h3 class="font-semibold">O'quvchi ma'lumotlari</h3>
+      <div class="mt-3 grid grid-cols-2 gap-2">
+        <input id="sfirst" placeholder="Ism" class="px-3 py-2 border rounded" />
+        <input id="slast" placeholder="Familiya" class="px-3 py-2 border rounded" />
+      </div>
+      <select id="sclass" class="mt-3 px-3 py-2 border rounded w-full"><option value="">Sinfni tanlang</option></select>
+      <div class="mt-3 flex gap-2">
+        <button id="sstart" data-pre="${preIndex===null? '': preIndex}" class="px-3 py-2 bg-blue-600 text-white rounded">Boshlash</button>
+        <button id="sback" class="px-3 py-2 border rounded">Orqaga</button>
+      </div>
+    </div>`;
+  qs('#workspace').innerHTML = html;
+  const sel = qs('#sclass');
+  CLASSES.forEach(c => { const op = document.createElement('option'); op.value=c; op.textContent=c; sel.appendChild(op); });
+  qs('#sback').addEventListener('click', ()=> { activeStudent = null; qs('#workspace').innerHTML = ''; });
+  // note: sstart handled by event delegation below
+}
+function startStudentFlowForIndex(idx){ openStudentForm(idx); }
+
+function showStudentTests(student){
+  activeStudent = student;
+  const tests = loadTests();
+  const div = document.createElement('div'); div.className='p-4 bg-white border rounded';
+  let html = `<h3 class="font-semibold">Salom, ${escapeHtml(student.name)} ${escapeHtml(student.surname)}</h3><div class="mt-3">`;
+  if(!tests.length) html += `<div class="text-sm text-slate-500">Hozircha testlar yo'q</div>`;
+  tests.forEach((t,i) => {
+    html += `<div class="p-2 border rounded mb-2 flex justify-between items-center">
+      <div><strong>${escapeHtml(t.title)}</strong><div class="text-xs text-slate-400">${t.questions.length} savol</div></div>
+      <div><button data-i="${i}" class="takeBtn px-2 py-1 bg-green-600 text-white rounded">Boshlash</button></div>
+    </div>`;
+  });
+  html += `</div>`;
+  div.innerHTML = html;
+  qs('#workspace').innerHTML = ''; qs('#workspace').appendChild(div);
+  // takeBtn handled by delegation
+}
+
+function startTestForStudent(student, idx){
+  const tests = loadTests();
+  const t = tests[idx];
+  if(!t) return alert('Test topilmadi');
+  let cur = 0;
+  const answers = Array(t.questions.length).fill(null);
+  function renderQ(){
+    const q = t.questions[cur];
+    let html = `<div class="p-4 bg-white border rounded"><h3 class="font-semibold">${escapeHtml(t.title)} — ${cur+1}/${t.questions.length}</h3>`;
+    if(q.img) html += `<div class="mt-3"><img src="${q.img}" alt="qimg" class="preview mx-auto" /></div>`;
+    html += `<p class="mt-2">${escapeHtml(q.text)}</p><div class="mt-2 text-xs text-slate-500">Ball: ${Number(q.points || 1)}</div><div class="mt-3">`;
+    q.options.forEach((o,oi) => {
+      const letter = ['A','B','C','D'][oi];
+      const optImg = (q.optionsImgs && q.optionsImgs[oi]) ? `<div class="mt-2"><img src="${q.optionsImgs[oi]}" class="preview" alt="opt${oi}" /></div>` : '';
+      html += `<label class="block p-2 border rounded my-1 cursor-pointer"><input type="radio" name="opt" value="${oi}" ${answers[cur]===oi?'checked':''}/> <strong>${letter}.</strong> ${escapeHtml(o)} ${optImg}</label>`;
+    });
+    html += `</div><div class="mt-3 flex gap-2"><button id="prev" class="px-2 py-1 border rounded">Orqaga</button>`;
+    html += (cur < t.questions.length-1) ? '<button id="next" class="px-2 py-1 bg-blue-600 text-white rounded">Keyingi</button>' : '<button id="finish" class="px-2 py-1 bg-green-600 text-white rounded">Tugatish</button>';
+    html += `<div class="ml-auto text-sm text-slate-500">Ism: ${escapeHtml(student.name)} ${escapeHtml(student.surname)} | Sinf: ${escapeHtml(student.cls)}</div></div></div>`;
+    qs('#workspace').innerHTML = html;
+    qsa('input[name="opt"]').forEach(inp => inp.addEventListener('change', e => answers[cur] = Number(e.target.value)));
+    qs('#prev').addEventListener('click', ()=> { if(cur>0){ cur--; renderQ(); } else showStudentTests(student); });
+    const next = qs('#next'); if(next) next.addEventListener('click', ()=> { cur++; renderQ(); });
+    const fin = qs('#finish'); if(fin) fin.addEventListener('click', finish);
+  }
+  function finish(){
+    const tQ = t.questions;
+    let earned = 0, total = 0, correctCount = 0;
+    for(let i=0;i<tQ.length;i++){
+      const pts = Number(tQ[i].points || 1);
+      total += pts;
+      const ansLetter = (answers[i] !== null && answers[i] !== undefined) ? ['a','b','c','d'][answers[i]] : null;
+      if(ansLetter && ansLetter === (tQ[i].correct || 'a')) { earned += pts; correctCount++; }
+    }
+    const percent = total ? Math.round((earned/total)*100) : 0;
+    addResult({
+      testId: t.id,
+      testTitle: t.title,
+      student: student,
+      earned, total, percent, correctCount,
+      timestamp: new Date().toISOString()
+    });
+    qs('#workspace').innerHTML = `<div class="p-4 bg-white border rounded text-center"><h3 class="font-semibold">Natija: ${percent}%</h3><p class="mt-2">Ball: ${earned} / ${total}</p><p class="mt-1 text-sm text-slate-500">To'g'ri: ${correctCount} / ${tQ.length}</p><div class="mt-3"><button id="done" class="px-3 py-1 border rounded">OK</button></div></div>`;
+    qs('#done').addEventListener('click', ()=> qs('#workspace').innerHTML = '');
+  }
+  renderQ();
+}
+
+/* ---------- Admin login & panel ---------- */
+function openAdminLogin(onSuccess){
+  const ws = qs('#workspace');
+  ws.innerHTML = `<div class="p-4 bg-white border rounded"><h3 class="font-semibold">Admin kirish (demo)</h3>
+    <div class="mt-2">
+      <input id="admUser" placeholder="Login" class="px-3 py-2 border rounded w-full mb-2"/>
+      <input id="admPass" type="password" placeholder="Parol" class="px-3 py-2 border rounded w-full mb-2"/>
+      <div class="flex gap-2"><button id="admLogin" class="px-3 py-2 bg-blue-600 text-white rounded">Kirish</button><button id="admCancel" class="px-3 py-2 border rounded">Bekor</button></div>
+      <div id="admMsg" class="text-sm text-red-600 mt-2"></div>
+    </div></div>`;
+  qs('#admCancel').addEventListener('click', ()=> ws.innerHTML = '');
+  qs('#admLogin').addEventListener('click', ()=> {
+    const u = qs('#admUser').value.trim(); const p = qs('#admPass').value.trim(); const stored = getAdminCreds();
+    if(u === stored.user && p === stored.pass){
+      if(typeof onSuccess === 'function') onSuccess(); else openAdminPanel();
+    } else qs('#admMsg').textContent = 'Login yoki parol xato';
+  });
+}
+
+function openAdminPanel(afterOpen){
+  const ws = qs('#workspace');
+  ws.innerHTML = `<div class="p-4 bg-white border rounded">
+    <div class="flex justify-between items-center"><h3 class="font-semibold">Admin panel</h3><div><button id="logout" class="px-2 py-1 border rounded">Chiqish</button></div></div>
+    <div class="mt-3">
+      <input id="newTitle" placeholder="Test nomi" class="px-3 py-2 border rounded w-full"/>
+      <div class="flex gap-2 mt-2">
+        <button id="createTest" class="px-3 py-2 bg-green-600 text-white rounded">Yaratish</button>
+        <button id="exportAll" class="px-3 py-2 border rounded">Barchasini eksport</button>
+        <button id="importBtn" class="px-3 py-2 border rounded">Import</button>
+        <button id="changeCredsBtn" class="px-3 py-2 border rounded">Change credentials</button>
+        <button id="viewAllResults" class="px-3 py-2 border rounded">Barcha natijalar</button>
+      </div>
+    </div>
+    <div id="adminTests" class="mt-4"></div>
+  </div>`;
+  qs('#logout').addEventListener('click', ()=> ws.innerHTML = '');
+  qs('#createTest').addEventListener('click', ()=> {
+    const title = qs('#newTitle').value.trim(); if(!title) return alert('Test nomi kiriting');
+    const arr = loadTests(); arr.push({ id: Date.now(), title, questions: [] }); saveTests(arr); qs('#newTitle').value = ''; renderAdminTestsArea();
+  });
+  qs('#exportAll').addEventListener('click', ()=> {
+    const data = loadTests(); const blob = new Blob([JSON.stringify(data, null,2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='tests_export.json'; a.click(); URL.revokeObjectURL(url);
+  });
+  qs('#importBtn').addEventListener('click', ()=> qs('#fileInput').click());
+  qs('#viewAllResults').addEventListener('click', ()=> renderAllResults());
+  qs('#changeCredsBtn').addEventListener('click', ()=> showChangeCredsUI());
+  renderAdminTestsArea();
+  if(typeof afterOpen === 'function') afterOpen();
+}
+
+/* ---------- Admin editing (with images) ----------
+   UPDATED: renderAdminTestsArea now relies on event delegation (no per-button listeners) */
+function renderAdminTestsArea(){
+  const area = qs('#adminTests');
+  const tests = loadTests();
+  if(!tests.length) { area.innerHTML = '<div class="text-sm text-slate-500">Testlar mavjud emas.</div>'; return; }
+  area.innerHTML = tests.map((t,i)=>`
+    <div class="p-2 border rounded mt-2" data-test-index="${i}">
+      <strong>${escapeHtml(t.title)}</strong>
+      <div class="text-xs text-slate-500">${t.questions.length} savol</div>
+      <div class="mt-2 flex gap-2">
+        <button data-i="${i}" class="editBtn px-2 py-1 border rounded">Tahrirlash</button>
+        <button data-i="${i}" class="delBtn px-2 py-1 border rounded">O'chir</button>
+        <button data-i="${i}" class="expBtn px-2 py-1 border rounded">Export</button>
+        <button data-i="${i}" class="resultsBtn px-2 py-1 border rounded">Natijalar</button>
+      </div>
+    </div>`).join('');
+}
+
+/* editTestByIndex unchanged (works as before) */
+function editTestByIndex(index){
+  const tests = loadTests(); const t = tests[index];
+  if(!t) return alert('Test topilmadi');
+  const ws = qs('#workspace');
+  ws.innerHTML = `<div class="p-4 bg-white border rounded">
+    <div class="flex justify-between items-center"><h3 class="font-semibold">Tahrirlash — ${escapeHtml(t.title)}</h3><div><button id="backAdmin" class="px-2 py-1 border rounded">Orqaga</button></div></div>
+    <div id="qArea" class="mt-3"></div>
+    <div class="mt-3 flex gap-2"><button id="addQ" class="px-2 py-1 border rounded">Savol qo'shish</button><button id="saveTest" class="px-2 py-1 bg-blue-600 text-white rounded">Saqlash</button></div>
+  </div>`;
+  const qArea = qs('#qArea');
+
+  function renderQs(){
+    qArea.innerHTML = t.questions.map((q,qi)=>`
+      <div class="p-3 border rounded mt-2 bg-slate-50 qEditor" data-qi="${qi}">
+        <label class="text-sm">Savol matni</label>
+        <input data-qi="${qi}" class="qtext w-full px-2 py-1 border rounded" value="${escapeHtml(q.text)}" />
+        <div class="mt-2 flex items-center gap-3">
+          <div>
+            <label class="text-xs">Savol rasmi</label><br/>
+            <input data-qi="${qi}" type="file" accept="image/*" class="qimgFile" />
+            <input type="hidden" class="qimgVal" value="${q.img ? escapeHtml(q.img) : ''}" />
+            <div class="mt-2">${ q.img ? `<img src="${q.img}" class="preview" />` : '' }</div>
+          </div>
+          <div class="ml-4">
+            <label class="text-xs">Ball</label><br/>
+            <input data-qi="${qi}" class="points w-24 px-2 py-1 border rounded" value="${q.points ?? 1}" />
+          </div>
+          <div class="ml-auto">
+            <button class="removeQ px-2 py-1 border rounded">O'chirish</button>
+          </div>
+        </div>
+
+        <div class="mt-3 grid gap-2">
+          <div>
+            <label class="text-xs">Variant A</label>
+            <div class="flex gap-2 items-start">
+              <input data-qi="${qi}" data-oi="0" class="opt w-full px-2 py-1 border rounded" value="${escapeHtml((q.options||[])[0] || '')}" />
+              <div>
+                <input data-qi="${qi}" data-oi="0" type="file" accept="image/*" class="optImgFile" />
+                <input type="hidden" class="optImgVal" data-qi="${qi}" data-oi="0" value="${(q.optionsImgs && q.optionsImgs[0]) ? escapeHtml(q.optionsImgs[0]) : ''}" />
+              </div>
+            </div>
+            <div class="mt-2">${ (q.optionsImgs && q.optionsImgs[0]) ? `<img src="${q.optionsImgs[0]}" class="preview" />` : '' }</div>
+          </div>
+
+          <div>
+            <label class="text-xs">Variant B</label>
+            <div class="flex gap-2 items-start">
+              <input data-qi="${qi}" data-oi="1" class="opt w-full px-2 py-1 border rounded" value="${escapeHtml((q.options||[])[1] || '')}" />
+              <div>
+                <input data-qi="${qi}" data-oi="1" type="file" accept="image/*" class="optImgFile" />
+                <input type="hidden" class="optImgVal" data-qi="${qi}" data-oi="1" value="${(q.optionsImgs && q.optionsImgs[1]) ? escapeHtml(q.optionsImgs[1]) : ''}" />
+              </div>
+            </div>
+            <div class="mt-2">${ (q.optionsImgs && q.optionsImgs[1]) ? `<img src="${q.optionsImgs[1]}" class="preview" />` : '' }</div>
+          </div>
+
+          <div>
+            <label class="text-xs">Variant C</label>
+            <div class="flex gap-2 items-start">
+              <input data-qi="${qi}" data-oi="2" class="opt w-full px-2 py-1 border rounded" value="${escapeHtml((q.options||[])[2] || '')}" />
+              <div>
+                <input data-qi="${qi}" data-oi="2" type="file" accept="image/*" class="optImgFile" />
+                <input type="hidden" class="optImgVal" data-qi="${qi}" data-oi="2" value="${(q.optionsImgs && q.optionsImgs[2]) ? escapeHtml(q.optionsImgs[2]) : ''}" />
+              </div>
+            </div>
+            <div class="mt-2">${ (q.optionsImgs && q.optionsImgs[2]) ? `<img src="${q.optionsImgs[2]}" class="preview" />` : '' }</div>
+          </div>
+
+          <div>
+            <label class="text-xs">Variant D</label>
+            <div class="flex gap-2 items-start">
+              <input data-qi="${qi}" data-oi="3" class="opt w-full px-2 py-1 border rounded" value="${escapeHtml((q.options||[])[3] || '')}" />
+              <div>
+                <input data-qi="${qi}" data-oi="3" type="file" accept="image/*" class="optImgFile" />
+                <input type="hidden" class="optImgVal" data-qi="${qi}" data-oi="3" value="${(q.optionsImgs && q.optionsImgs[3]) ? escapeHtml(q.optionsImgs[3]) : ''}" />
+              </div>
+            </div>
+            <div class="mt-2">${ (q.optionsImgs && q.optionsImgs[3]) ? `<img src="${q.optionsImgs[3]}" class="preview" />` : '' }</div>
+          </div>
+
+        </div>
+
+        <div class="mt-3 flex items-center gap-2">
+          <label class="text-sm">To'g'ri</label>
+          <select data-qi="${qi}" class="correctSelect w-24 px-2 py-1 border rounded">
+            <option value="a" ${ (q.correct==='a')? 'selected' : '' }>A</option>
+            <option value="b" ${ (q.correct==='b')? 'selected' : '' }>B</option>
+            <option value="c" ${ (q.correct==='c')? 'selected' : '' }>C</option>
+            <option value="d" ${ (q.correct==='d')? 'selected' : '' }>D</option>
+          </select>
+        </div>
+      </div>`
+    ).join('');
+  }
+
+  renderQs();
+
+  // bind file inputs and remove buttons
+  qArea.querySelectorAll('.qEditor').forEach(container => {
+    const qi = Number(container.dataset.qi);
+    const qimgFile = container.querySelector('.qimgFile');
+    const qimgVal = container.querySelector('.qimgVal');
+    if(qimgFile){
+      qimgFile.addEventListener('change', (ev)=> {
+        const f = ev.target.files?.[0]; if(!f) return;
+        const fr = new FileReader();
+        fr.onload = () => {
+          qimgVal.value = fr.result;
+          let prev = container.querySelector('.qimgPreview');
+          if(prev) prev.src = fr.result;
+          else { const img = document.createElement('img'); img.className = 'preview qimgPreview'; img.src = fr.result; qimgFile.insertAdjacentElement('afterend', img); }
+        };
+        fr.readAsDataURL(f);
+      });
+    }
+    container.querySelectorAll('.optImgFile').forEach(inp=>{
+      inp.addEventListener('change', (ev)=>{
+        const f = ev.target.files?.[0]; if(!f) return;
+        const oi = Number(ev.target.dataset.oi); const fr = new FileReader();
+        fr.onload = () => {
+          const hidden = container.querySelector(`.optImgVal[data-qi="${qi}"][data-oi="${oi}"]`);
+          if(hidden) hidden.value = fr.result;
+          let prev = container.querySelector(`img.optPreview_q${qi}_o${oi}`);
+          if(prev) prev.src = fr.result;
+          else { const img = document.createElement('img'); img.className = `preview optPreview_q${qi}_o${oi}`; img.src = fr.result; inp.insertAdjacentElement('afterend', img); }
+        };
+        fr.readAsDataURL(f);
+      });
+    });
+    const removeBtn = container.querySelector('.removeQ');
+    if(removeBtn) removeBtn.addEventListener('click', ()=> container.remove());
+  });
+
+  // addQ: update persisted tests directly and re-open editor
+  const addQBtn = qs('#addQ');
+  if(addQBtn){
+    addQBtn.addEventListener('click', ()=> {
+      const testsLatest = loadTests();
+      if(!testsLatest[index]) {
+        alert('Test topilmadi (index mismatch). Iltimos sahifani yangilang va qayta urinib ko‘ring.');
+        return;
+      }
+      const newQ = { text:'', options:['','','',''], optionsImgs:['','','',''], correct:'a', points:1, img: '' };
+      testsLatest[index].questions = testsLatest[index].questions || [];
+      testsLatest[index].questions.push(newQ);
+      saveTests(testsLatest);
+      editTestByIndex(index);
+    });
+  }
+
+  qs('#saveTest').onclick = ()=> {
+    const editors = qArea.querySelectorAll('.qEditor');
+    const newQs = [];
+    editors.forEach(ed => {
+      const qi = Number(ed.dataset.qi);
+      const text = ed.querySelector('.qtext')?.value.trim() || '';
+      const points = Number(ed.querySelector('.points')?.value || 1);
+      const correct = ed.querySelector('.correctSelect')?.value || 'a';
+      const opts = Array.from(ed.querySelectorAll('.opt')).map(i=> i.value.trim());
+      const qimg = ed.querySelector('.qimgVal')?.value || '';
+      const optImgs = [0,1,2,3].map(oi => {
+        const h = ed.querySelector(`.optImgVal[data-qi="${qi}"][data-oi="${oi}"]`);
+        return h ? h.value || '' : '';
+      });
+      while(opts.length < 4) opts.push('');
+      const nonEmptyOpts = opts.filter(s=>s.trim()!=='');
+      if(text && nonEmptyOpts.length>=2){
+        newQs.push({ text, options: opts.slice(0,4), optionsImgs: optImgs.slice(0,4), correct, points, img: qimg });
+      }
+    });
+    t.questions = newQs;
+    const testsNow = loadTests();
+    testsNow[index] = t;
+    saveTests(testsNow);
+    alert('Saqlandi');
+    openAdminPanel();
+  };
+
+  qs('#backAdmin').addEventListener('click', ()=> openAdminPanel());
+}
+
+/* Change credentials UI */
+function showChangeCredsUI(){
+  const existing = qs('#changeCreds');
+  if(existing) existing.remove();
+  const area = qs('#adminTests') || qs('#workspace');
+  if(!area) return alert('Admin panel topilmadi.');
+  const html = `
+    <div id="changeCreds" class="p-4 mt-4 bg-white border rounded">
+      <h4 class="font-semibold mb-2">Admin credentialsni o'zgartirish</h4>
+      <div class="grid gap-2">
+        <input id="newAdminUser" placeholder="Yangi login" class="px-3 py-2 border rounded" />
+        <input id="newAdminPass" placeholder="Yangi parol" class="px-3 py-2 border rounded" />
+        <div class="flex gap-2">
+          <button id="saveAdminCreds" class="px-3 py-2 bg-green-600 text-white rounded">Saqlash</button>
+          <button id="cancelSaveAdmin" class="px-3 py-2 border rounded">Bekor</button>
+        </div>
+        <div id="credMsg" class="text-sm text-slate-600 mt-1"></div>
+      </div>
+    </div>`;
+  area.insertAdjacentHTML('afterend', html);
+  qs('#newAdminUser').value = getAdminCreds().user;
+  qs('#newAdminPass').value = getAdminCreds().pass;
+
+  qs('#cancelSaveAdmin').addEventListener('click', ()=> { const el = qs('#changeCreds'); if(el) el.remove(); });
+  qs('#saveAdminCreds').addEventListener('click', ()=> {
+    const u = qs('#newAdminUser').value.trim(); const p = qs('#newAdminPass').value.trim();
+    if(!u || !p){ qs('#credMsg').textContent = 'Iltimos login va parolni kiriting.'; return; }
+    saveAdminCreds(u,p);
+    qs('#credMsg').textContent = "Saqlandi. Keyingi kirishda yangi credential ishlatiladi.";
+    setTimeout(()=> { const el = qs('#changeCreds'); if(el) el.remove(); }, 1200);
+  });
+}
+
+/* Results rendering */
+function renderResultsForTest(i){
+  const tests = loadTests(); const t = tests[i]; if(!t) return alert('Test topilmadi');
+  const results = loadResults().filter(r => r.testId === t.id);
+  let html = `<div class="p-4 bg-white border rounded"><div class="flex items-center justify-between"><h3 class="font-semibold">Natijalar — ${escapeHtml(t.title)}</h3><div><button id="backToAdmin" class="px-2 py-1 border rounded">Orqaga</button></div></div>`;
+  if(!results.length) html += `<div class="mt-4 text-sm text-slate-500">Hozircha natijalar yo'q.</div>`;
+  else{
+    html += `<div class="mt-4 overflow-auto"><table class="w-full text-sm border-collapse"><thead><tr class="text-left"><th class="pb-2">Ism Familiya</th><th>Sinfi</th><th>Ball</th><th>%</th><th>Sana</th></tr></thead><tbody>`;
+    results.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp)).forEach(r => {
+      const d = new Date(r.timestamp);
+      html += `<tr class="border-t"><td class="py-2">${escapeHtml(r.student.name)} ${escapeHtml(r.student.surname)}</td><td>${escapeHtml(r.student.cls)}</td><td>${r.earned}/${r.total}</td><td>${r.percent}%</td><td class="text-xs text-slate-500">${d.toLocaleString()}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+  html += `</div>`;
+  qs('#workspace').innerHTML = html;
+  qs('#backToAdmin').addEventListener('click', ()=> openAdminPanel());
+}
+
+function renderAllResults(){
+  const all = loadResults();
+  let html = `<div class="p-4 bg-white border rounded"><div class="flex items-center justify-between"><h3 class="font-semibold">Barcha natijalar</h3><div><button id="backToAdminAll" class="px-2 py-1 border rounded">Orqaga</button></div></div>`;
+  if(!all.length) html += `<div class="mt-4 text-sm text-slate-500">Hozircha natijalar yo'q.</div>`;
+  else{
+    html += `<div class="mt-4 overflow-auto"><table class="w-full text-sm border-collapse"><thead><tr class="text-left"><th class="pb-2">Test</th><th>Ism Familiya</th><th>Sinfi</th><th>Ball</th><th>%</th><th>Sana</th></tr></thead><tbody>`;
+    all.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp)).forEach(r => {
+      const d = new Date(r.timestamp);
+      html += `<tr class="border-t"><td class="py-2">${escapeHtml(r.testTitle)}</td><td>${escapeHtml(r.student.name)} ${escapeHtml(r.student.surname)}</td><td>${escapeHtml(r.student.cls)}</td><td>${r.earned}/${r.total}</td><td>${r.percent}%</td><td class="text-xs text-slate-500">${d.toLocaleString()}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+  html += `</div>`;
+  qs('#workspace').innerHTML = html;
+  qs('#backToAdminAll').addEventListener('click', ()=> openAdminPanel());
+}
+
+/* ---------- Event delegation for workspace buttons (fixes lost listeners) ---------- */
+document.addEventListener('click', (ev) => {
+  const t = ev.target;
+  // student form: start button (id sstart)
+  if(t.matches('#sstart')){
+    const pre = t.dataset.pre;
+    const first = qs('#sfirst')?.value?.trim();
+    const last  = qs('#slast')?.value?.trim();
+    const cls   = qs('#sclass')?.value;
+    if(!first || !last || !cls) return alert("Iltimos hammasini to'ldiring");
+    const student = { name:first, surname:last, cls };
+    activeStudent = student;
+    if(pre !== undefined && pre !== '') startTestForStudent(student, Number(pre));
+    else showStudentTests(student);
+    return;
+  }
+
+  // takeBtn inside student tests
+  if(t.closest && (t.matches('.takeBtn') || t.closest('.takeBtn'))){
+    const btn = t.matches('.takeBtn') ? t : t.closest('.takeBtn');
+    const idx = Number(btn.dataset.i);
+    if(!activeStudent) {
+      // open student form preselecting this test
+      openStudentForm(idx);
+      return;
+    }
+    startTestForStudent(activeStudent, idx);
+    return;
+  }
+
+  // adminTests area buttons delegation (Tahrirlash / O'chir / Export / Natijalar)
+  const adminBtn = t.closest && t.closest('#adminTests .editBtn, #adminTests .delBtn, #adminTests .expBtn, #adminTests .resultsBtn');
+  if(adminBtn){
+    const btn = adminBtn;
+    const idx = Number(btn.dataset.i);
+    if(btn.classList.contains('editBtn')){
+      // open editor directly (we're already in admin panel)
+      editTestByIndex(idx);
+      return;
+    }
+    if(btn.classList.contains('delBtn')){
+      if(confirm('Haqiqatan ham ochirilsin?')){
+        deleteTest(idx);
+        renderAdminTestsArea();
+        renderTestsList();
+      }
+      return;
+    }
+    if(btn.classList.contains('expBtn')){
+      const tdata = loadTests()[idx];
+      if(!tdata) return alert('Test topilmadi');
+      const blob = new Blob([JSON.stringify(tdata, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = (tdata.title||'test')+'.json'; a.click(); URL.revokeObjectURL(url);
+      return;
+    }
+    if(btn.classList.contains('resultsBtn')){
+      renderResultsForTest(idx);
+      return;
+    }
+  }
+});
+
+/* Init & bindings */
+document.addEventListener('DOMContentLoaded', () => {
+  const adminBtn = qs('#adminBtn');
+  const studentBtn = qs('#studentBtn');
+  const fileInput = qs('#fileInput');
+  const importMainBtn = qs('#importMainBtn');
+
+  // wire file input handler
+  fileInput.addEventListener('change', handleFileImport);
+
+  // header import button triggers file selection
+  if(importMainBtn) importMainBtn.addEventListener('click', () => fileInput.click());
+
+  if(adminBtn) adminBtn.addEventListener('click', () => openAdminLogin());
+  if(studentBtn) studentBtn.addEventListener('click', () => openStudentForm());
+  renderTestsList();
+});
+</script>
+</body>
+</html>
