@@ -1,0 +1,41 @@
+[
+  {
+    "id": 1762495478188,
+    "title": "informatika",
+    "questions": [
+      {
+        "text": "Operatsion tizim nimaga tegishli:",
+        "options": [
+          "Amaliy dasturiy ta’minotiga",
+          "Dastur-qobiqlarga",
+          "Tizim blokida joylashtirilgan qurilmalarga",
+          "Tizimli dasturiy ta’minotga"
+        ],
+        "correct": "d",
+        "points": 10
+      },
+      {
+        "text": "Inson uchun ish stoliga bo'lgan masofa qanchadan kam bo'lmasligi kerak?",
+        "options": [
+          "20",
+          "30",
+          "40",
+          "50"
+        ],
+        "correct": "a",
+        "points": 10
+      },
+      {
+        "text": "2. Informatika qachon asos solingan?  B) B)",
+        "options": [
+          "A) XX asrning 60 yillarida",
+          "B) B) XIX asrning 70 yillarida",
+          "XX asrning 50 yillarida",
+          "XIX asrning 60 yillarida 2"
+        ],
+        "correct": "c",
+        "points": 80
+      }
+    ]
+  }
+]
